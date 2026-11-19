@@ -1,0 +1,2101 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Кликер — ТАНЦУЙ ПАНТЕРА</title>
+    <!-- Подключение Tailwind CSS для быстрой и адаптивной верстки -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Подключение современных шрифтов с поддержкой кириллицы -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=Rubik+Mono+One&display=swap" rel="stylesheet">
+    <style>
+        /* Базовые настройки и запрет выделения текста при быстрых кликах */
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Разрешаем выделение текста в чате и полях ввода */
+        input, textarea, #chatMessages, #chatMessages * {
+            user-select: text !important;
+            -webkit-user-select: text !important;
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background: radial-gradient(circle at center, #1e1338 0%, #0d081d 65%, #06030e 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .bg-grid {
+            background-size: 40px 40px;
+            background-image: 
+                linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        }
+
+        /* Анимация всплывающих слов ("коч", "голда", "свои свои", "ель патрон" и др.) — разлёт во все стороны */
+        @keyframes scatterWord {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.35) rotate(var(--rot-start));
+            }
+            15% {
+                opacity: 1;
+                transform: translate(calc(-50% + var(--dx) * 0.25), calc(-50% + var(--dy) * 0.25)) scale(1.2) rotate(var(--rot-mid));
+            }
+            75% {
+                opacity: 1;
+                transform: translate(calc(-50% + var(--dx) * 0.85), calc(-50% + var(--dy) * 0.85)) scale(1.05) rotate(var(--rot-end));
+            }
+            100% {
+                opacity: 0;
+                transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.75) rotate(var(--rot-end));
+            }
+        }
+
+        .floating-word {
+            position: fixed;
+            pointer-events: none;
+            font-weight: 900;
+            text-transform: uppercase;
+            white-space: nowrap;
+            z-index: 40;
+            text-shadow: 0 4px 14px rgba(0, 0, 0, 0.85), 0 0 22px currentColor;
+            animation: scatterWord 1.05s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Анимация ударной волны вокруг вытянутой кнопки */
+        @keyframes rippleExpand {
+            0% {
+                transform: translate(-50%, -50%) scale(0.95);
+                opacity: 0.85;
+                border-width: 4px;
+            }
+            100% {
+                transform: translate(-50%, -50%) scaleX(1.22) scaleY(1.65);
+                opacity: 0;
+                border-width: 1px;
+            }
+        }
+
+        .click-ripple {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 100%;
+            height: 100%;
+            border-radius: 1.75rem;
+            border-style: solid;
+            border-color: #fde047;
+            pointer-events: none;
+            animation: rippleExpand 0.55s ease-out forwards;
+        }
+
+        /* Анимация искр/частиц при клике */
+        @keyframes sparkFly {
+            0% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0);
+                opacity: 0;
+            }
+        }
+
+        .click-spark {
+            position: fixed;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 35;
+            animation: sparkFly 0.55s cubic-bezier(0.1, 0.8, 0.2, 1) forwards;
+        }
+
+        /* Стиль вытянутой серой кнопки в спокойном состоянии и яркое свечение при нажатии */
+        .main-btn {
+            background: linear-gradient(145deg, #4b5563 0%, #374151 50%, #1f2937 100%);
+            border-color: #6b7280;
+            box-shadow: 
+                0 10px 25px rgba(0, 0, 0, 0.65),
+                inset 0 2px 6px rgba(255, 255, 255, 0.18),
+                inset 0 -6px 14px rgba(17, 24, 39, 0.85);
+            transition: transform 0.08s cubic-bezier(0.34, 1.56, 0.64, 1), 
+                        box-shadow 0.12s ease, 
+                        background 0.1s ease, 
+                        border-color 0.1s ease;
+        }
+
+        .main-btn:hover {
+            background: linear-gradient(145deg, #525d6d 0%, #3f4a5a 50%, #253041 100%);
+            border-color: #9ca3af;
+            box-shadow: 
+                0 12px 30px rgba(0, 0, 0, 0.75),
+                0 0 20px rgba(156, 163, 175, 0.25),
+                inset 0 2px 8px rgba(255, 255, 255, 0.25),
+                inset 0 -6px 14px rgba(17, 24, 39, 0.85);
+        }
+
+        .main-btn.pressed {
+            transform: scale(0.96);
+            background: linear-gradient(135deg, #fef08a 0%, #facc15 40%, #f59e0b 100%);
+            border-color: #ffffff;
+            box-shadow: 
+                0 0 45px rgba(250, 204, 21, 0.95),
+                0 0 90px rgba(245, 158, 11, 0.75),
+                inset 0 0 24px rgba(255, 255, 255, 0.9);
+        }
+
+        .main-btn .btn-label {
+            color: #e5e7eb;
+            transition: color 0.08s ease, text-shadow 0.08s ease;
+        }
+
+        .main-btn.pressed .btn-label {
+            color: #1f2937;
+            text-shadow: 0 0 12px rgba(255, 255, 255, 0.8);
+        }
+
+        /* Анимация баннера "ТАНЦУЙ ПАНТЕРА" */
+        @keyframes bannerPopIn {
+            0% {
+                opacity: 0;
+                transform: scale(0.3) rotate(-6deg);
+            }
+            12% {
+                opacity: 1;
+                transform: scale(1.08) rotate(2deg);
+            }
+            20% {
+                transform: scale(1) rotate(0deg);
+            }
+            85% {
+                opacity: 1;
+                transform: scale(1) rotate(0deg);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(1.15) translateY(-20px);
+            }
+        }
+
+        @keyframes pantherDance {
+            0%, 100% {
+                transform: translateY(0) rotate(-12deg) scale(1);
+            }
+            25% {
+                transform: translateY(-14px) rotate(0deg) scale(1.12);
+            }
+            50% {
+                transform: translateY(0) rotate(12deg) scale(1);
+            }
+            75% {
+                transform: translateY(-14px) rotate(0deg) scale(1.12);
+            }
+        }
+
+        @keyframes neonRainbow {
+            0%, 100% {
+                text-shadow: 0 0 15px #facc15, 0 0 35px #f59e0b, 0 0 60px #ec4899;
+                color: #fef08a;
+            }
+            50% {
+                text-shadow: 0 0 15px #38bdf8, 0 0 35px #a855f7, 0 0 60px #f43f5e;
+                color: #ffffff;
+            }
+        }
+
+        .celebration-card {
+            animation: bannerPopIn 3.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        .panther-dancer {
+            display: inline-block;
+            animation: pantherDance 0.48s infinite ease-in-out;
+        }
+
+        .panther-title {
+            font-family: 'Rubik Mono One', 'Montserrat', sans-serif;
+            animation: neonRainbow 0.6s infinite alternate;
+        }
+
+        /* Анимация конфетти */
+        @keyframes confettiFall {
+            0% {
+                transform: translateY(-10vh) rotate(0deg) scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(110vh) rotate(720deg) scale(0.8);
+                opacity: 0.2;
+            }
+        }
+
+        .confetti-piece {
+            position: fixed;
+            top: 0;
+            pointer-events: none;
+            z-index: 60;
+            animation: confettiFall linear forwards;
+        }
+
+        /* Анимация дождя дизлайков при команде "аморально" */
+        @keyframes dislikeFall {
+            0% {
+                transform: translateY(-12vh) rotate(-25deg) scale(0.7);
+                opacity: 0;
+            }
+            12% {
+                opacity: 1;
+            }
+            85% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(112vh) rotate(35deg) scale(1.2);
+                opacity: 0;
+            }
+        }
+
+        .dislike-rain {
+            position: fixed;
+            top: 0;
+            pointer-events: none;
+            z-index: 65;
+            filter: drop-shadow(0 4px 12px rgba(244, 63, 94, 0.75));
+            animation: dislikeFall linear forwards;
+        }
+
+        /* Анимация облачков при команде "валя" */
+        @keyframes gasCloudFloat {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.4) rotate(0deg);
+            }
+            20% {
+                opacity: 0.95;
+                transform: translate(calc(-50% + var(--gx) * 0.3), calc(-50% + var(--gy) * 0.3)) scale(1.25) rotate(12deg);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(calc(-50% + var(--gx)), calc(-50% + var(--gy))) scale(1.85) rotate(-18deg);
+            }
+        }
+
+        .gas-cloud {
+            position: fixed;
+            pointer-events: none;
+            z-index: 65;
+            filter: drop-shadow(0 0 18px rgba(132, 204, 22, 0.65));
+            animation: gasCloudFloat 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Анимация вылетающей монеты голды */
+        @keyframes goldFly {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, 0) scale(0.5);
+            }
+            20% {
+                opacity: 1;
+                transform: translate(-50%, -28px) scale(1.2);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(-50%, -85px) scale(0.95);
+            }
+        }
+
+        .gold-popup {
+            position: fixed;
+            pointer-events: none;
+            z-index: 45;
+            font-weight: 900;
+            color: #fde047;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 18px rgba(250, 204, 21, 0.9);
+            animation: goldFly 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Кастомный скроллбар для магазина */
+        .shop-scroll::-webkit-scrollbar {
+            width: 5px;
+        }
+        .shop-scroll::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 999px;
+        }
+        .shop-scroll::-webkit-scrollbar-thumb {
+            background: rgba(250, 204, 21, 0.35);
+            border-radius: 999px;
+        }
+
+        .custom-scroll::-webkit-scrollbar {
+            width: 5px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 999px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.35);
+            border-radius: 999px;
+        }
+
+        /* Анимация тряски экрана при юбилейном клике */
+        @keyframes screenShake {
+            0%, 100% { transform: translate(0, 0); }
+            20% { transform: translate(-6px, 4px); }
+            40% { transform: translate(6px, -4px); }
+            60% { transform: translate(-4px, -3px); }
+            80% { transform: translate(4px, 3px); }
+        }
+
+        .shake-screen {
+            animation: screenShake 0.35s ease-in-out;
+        }
+
+        /* Анимация падающих и вылетающих дизлайков для команды "аморально" */
+        @keyframes dislikeSpamAnim {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.2) rotate(var(--r0));
+            }
+            18% {
+                opacity: 1;
+                transform: translate(calc(-50% + var(--dx) * 0.3), calc(-50% + var(--dy) * 0.3)) scale(1.25) rotate(var(--r1));
+            }
+            80% {
+                opacity: 1;
+                transform: translate(calc(-50% + var(--dx) * 0.9), calc(-50% + var(--dy) * 0.9)) scale(1.0) rotate(var(--r2));
+            }
+            100% {
+                opacity: 0;
+                transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy) + 90px)) scale(0.6) rotate(var(--r2));
+            }
+        }
+
+        .dislike-particle {
+            position: fixed;
+            pointer-events: none;
+            z-index: 70;
+            filter: drop-shadow(0 4px 12px rgba(244, 63, 94, 0.7));
+            animation: dislikeSpamAnim cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Анимация облачков для команды "валя" */
+        @keyframes fartCloudAnim {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, 0) scale(0.4) rotate(0deg);
+            }
+            20% {
+                opacity: 0.95;
+                transform: translate(calc(-50% + var(--dx) * 0.3), -40px) scale(1.3) rotate(18deg);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(calc(-50% + var(--dx)), -170px) scale(2.1) rotate(-25deg);
+            }
+        }
+
+        .fart-cloud {
+            position: fixed;
+            pointer-events: none;
+            z-index: 70;
+            filter: drop-shadow(0 0 16px rgba(132, 204, 22, 0.75));
+            animation: fartCloudAnim 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Кастомный скроллбар для чата */
+        .chat-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        .chat-scroll::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.03);
+        }
+        .chat-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 999px;
+        }
+    </style>
+</head>
+<body class="relative flex flex-col justify-between items-center p-4 sm:p-6">
+
+    <!-- Фоновая сетка и световые пятна -->
+    <div class="fixed inset-0 bg-grid pointer-events-none z-0"></div>
+    <div class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] h-[340px] sm:w-[520px] sm:h-[520px] bg-amber-500/10 rounded-full blur-3xl pointer-events-none z-0"></div>
+
+    <!-- Верхняя панель: Статус следующей цели и кнопки управления -->
+    <header class="relative z-20 w-full max-w-3xl flex items-center justify-between gap-2 bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 shadow-xl">
+        <!-- Бейдж следующей цели -->
+        <div class="flex items-center gap-2 sm:gap-2.5">
+            <span class="text-xl sm:text-2xl">🐆</span>
+            <div>
+                <div class="text-[10px] sm:text-xs uppercase tracking-wider text-purple-300/80 font-bold">Следующая цель</div>
+                <div id="nextMilestoneText" class="text-xs sm:text-base font-black text-amber-400">10 кликов</div>
+            </div>
+        </div>
+
+        <!-- Баланс Голды -->
+        <div class="flex items-center gap-1.5 sm:gap-2 bg-amber-400/15 border border-amber-400/40 rounded-xl px-2.5 sm:px-3.5 py-1.5 shadow-[0_0_15px_rgba(250,204,21,0.15)]">
+            <span class="text-base sm:text-lg">🪙</span>
+            <div class="leading-tight">
+                <div class="text-[9px] sm:text-[10px] uppercase tracking-wider text-amber-200/80 font-bold">Голда</div>
+                <div id="goldDisplay" class="text-xs sm:text-base font-black text-amber-300">0</div>
+            </div>
+        </div>
+
+        <!-- Прогресс-бар до следующей цели (скрыт на узких экранах) -->
+        <div class="hidden lg:flex flex-col flex-1 max-w-[130px] mx-1">
+            <div class="flex justify-between text-[10px] text-white/60 mb-1 font-bold">
+                <span>Цель</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                <div id="progressBar" class="h-full bg-gradient-to-r from-amber-400 to-pink-500 rounded-full transition-all duration-150" style="width: 0%;"></div>
+            </div>
+        </div>
+
+        <!-- Кнопки чата, секретной панели (если разблокирована), магазина, звука и сброса -->
+        <div class="flex items-center gap-1.5 sm:gap-2">
+            <!-- Кнопка быстрого вызова панели КОЧ ГОЛДА -->
+            <button id="kochQuickBtn" type="button" title="Открыть панель КОЧ ГОЛДА"
+                class="hidden px-2.5 py-2 sm:py-2.5 rounded-xl bg-gradient-to-r from-yellow-400/25 to-amber-500/25 hover:from-yellow-400/40 hover:to-amber-500/40 active:scale-95 transition text-yellow-300 text-xs sm:text-sm font-black border border-yellow-400/60 shadow-[0_0_15px_rgba(250,204,21,0.3)] items-center gap-1">
+                <span>👑</span>
+                <span class="hidden md:inline">Коч</span>
+            </button>
+            <button id="chatBtn" type="button" title="Открыть чат (T)"
+                class="relative px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl bg-sky-500/20 hover:bg-sky-500/35 active:scale-95 transition text-sky-300 text-xs sm:text-sm font-black border border-sky-400/40 flex items-center gap-1.5">
+                <span>💬</span>
+                <span class="hidden sm:inline">Чат</span>
+            </button>
+            <button id="shopBtn" type="button" title="Магазин улучшений"
+                class="relative px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/35 active:scale-95 transition text-amber-300 text-xs sm:text-sm font-black border border-amber-400/40 flex items-center gap-1.5">
+                <span>🛒</span>
+                <span class="hidden sm:inline">Магазин</span>
+                <span id="shopBadge" class="hidden w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            </button>
+
+            <!-- Кнопка звука -->
+            <button id="muteBtn" type="button" title="Включить/выключить звук"
+                class="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 transition text-white flex items-center justify-center border border-white/10">
+                <span id="soundIcon" class="text-base sm:text-lg leading-none">🔊</span>
+            </button>
+
+            <!-- Кнопка сброса -->
+            <button id="resetBtn" type="button" title="Сбросить прогресс"
+                class="px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/30 active:scale-95 transition text-rose-300 text-xs sm:text-sm font-bold border border-rose-500/25">
+                Сброс
+            </button>
+        </div>
+    </header>
+
+    <!-- Центральная игровая зона: Счётчик и Главная кнопка -->
+    <main id="gameStage" class="relative z-10 flex flex-col items-center justify-center flex-1 w-full max-w-lg my-auto">
+        
+        <!-- Счётчик кликов -->
+        <div class="text-center mb-6 sm:mb-8">
+            <div class="text-xs sm:text-sm uppercase tracking-[0.25em] text-purple-300/70 font-bold mb-1">
+                Счётчик
+            </div>
+            <div id="counterDisplay" class="text-6xl sm:text-8xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-white via-amber-100 to-amber-400 drop-shadow-[0_4px_24px_rgba(251,191,36,0.35)] transition-transform duration-75">
+                0
+            </div>
+            <!-- Мини-индикатор характеристик и прогресса до следующей голды -->
+            <div class="mt-2 flex flex-wrap items-center justify-center gap-2 text-[11px] sm:text-xs font-bold">
+                <span class="px-2.5 py-0.5 rounded-full bg-white/10 text-sky-300 border border-white/10">
+                    ⚡ Сила клика: <span id="clickPowerBadge">+1</span>
+                </span>
+                <span class="px-2.5 py-0.5 rounded-full bg-white/10 text-emerald-300 border border-white/10">
+                    🤖 Автоклик: <span id="autoClickBadge">0/сек</span>
+                </span>
+                <span class="px-2.5 py-0.5 rounded-full bg-amber-400/15 text-amber-300 border border-amber-400/25">
+                    🪙 До голды: <span id="clicksToGoldBadge">10</span> кликов
+                </span>
+            </div>
+        </div>
+
+        <!-- Контейнер кнопки с ударными волнами -->
+        <div id="buttonWrapper" class="relative flex items-center justify-center w-full px-2">
+            <!-- Внешнее декоративное прямоугольное кольцо -->
+            <div class="absolute -inset-3 rounded-[2rem] border-2 border-dashed border-gray-400/25 pointer-events-none"></div>
+            
+            <!-- Главная вытянутая серая кнопка кликера -->
+            <button id="clickerBtn" type="button" aria-label="Нажать"
+                class="main-btn relative w-[310px] sm:w-[380px] h-[104px] sm:h-[120px] rounded-3xl flex items-center justify-center gap-3 sm:gap-4 cursor-pointer focus:outline-none border-4 px-6">
+                <span class="text-4xl sm:text-5xl drop-shadow-md pointer-events-none">⚡</span>
+                <span class="btn-label text-2xl sm:text-3xl font-black tracking-widest uppercase pointer-events-none">
+                    ЖМИ!
+                </span>
+            </button>
+        </div>
+
+        <!-- Подсказка внизу -->
+        <p class="mt-6 sm:mt-8 text-xs sm:text-sm text-white/50 text-center max-w-md font-medium leading-relaxed">
+            Каждые <span class="text-amber-300 font-bold">10 кликов</span> дают <span class="text-amber-300 font-bold">🪙 голду</span>. Трать её в <button id="inlineShopLink" type="button" class="text-amber-400 underline hover:text-amber-300 font-bold">магазине</button> на автоклик и усиления!
+        </p>
+    </main>
+
+    <!-- Нижняя панель: Последний выпавший дроп и рекорд -->
+    <footer class="relative z-20 w-full max-w-3xl flex items-center justify-between text-xs sm:text-sm text-white/60 bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl px-4 py-2.5">
+        <div>
+            Последнее слово: <span id="lastWordDisplay" class="font-bold text-amber-300">—</span>
+        </div>
+        <div>
+            Достигнуто целей: <span id="milestonesCountDisplay" class="font-bold text-purple-300">0</span>
+        </div>
+    </footer>
+
+    <!-- Оверлей празднования: "ТАНЦУЙ ПАНТЕРА" -->
+    <div id="celebrationOverlay" class="fixed inset-0 z-50 pointer-events-none flex items-center justify-center p-4 hidden">
+        <div id="celebrationCard" class="celebration-card bg-gradient-to-br from-purple-950/95 via-fuchsia-950/95 to-amber-950/95 border-2 border-amber-400/80 rounded-3xl px-6 py-8 sm:px-12 sm:py-10 text-center shadow-[0_0_80px_rgba(245,158,11,0.65)] backdrop-blur-xl max-w-xl w-full">
+            <div class="inline-block px-4 py-1 rounded-full bg-amber-400/20 border border-amber-400/50 text-amber-300 text-xs sm:text-sm font-black uppercase tracking-widest mb-4">
+                🎉 ЮБИЛЕЙНЫЙ РУБЕЖ: <span id="milestoneReachedNumber">10</span>! 🎉
+            </div>
+            
+            <div class="flex items-center justify-center gap-3 sm:gap-5 my-2">
+                <span class="panther-dancer text-5xl sm:text-7xl">🐆</span>
+                <span class="panther-dancer text-5xl sm:text-7xl" style="animation-delay: 0.15s;">🕺</span>
+                <span class="panther-dancer text-5xl sm:text-7xl" style="animation-delay: 0.3s;">🐆</span>
+            </div>
+
+            <h2 id="celebrationPhraseTitle" class="panther-title text-3xl sm:text-5xl font-black uppercase tracking-tight leading-tight mt-4">
+                ТАНЦУЙ ПАНТЕРА
+            </h2>
+            
+            <div class="mt-3 text-amber-200/90 text-sm sm:text-base font-bold">
+                Так держать! Летим к следующей цели! 🔥
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно Обычного Игрового Чата (без подсказок и списков команд) -->
+    <div id="chatModal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-[#130d24]/95 border border-sky-400/35 rounded-3xl p-4 sm:p-6 max-w-lg w-full shadow-[0_0_60px_rgba(14,165,233,0.25)] flex flex-col h-[74vh] max-h-[560px]">
+            <div class="flex items-center justify-between pb-3.5 border-b border-white/10 shrink-0">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-2xl">💬</span>
+                    <h3 class="text-base sm:text-lg font-black text-white">Игровой чат</h3>
+                </div>
+                <button id="closeChatBtn" type="button" class="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold flex items-center justify-center transition">
+                    ✕
+                </button>
+            </div>
+
+            <!-- История сообщений -->
+            <div id="chatMessages" class="custom-scroll flex-1 overflow-y-auto py-3.5 space-y-2.5 pr-1 text-xs sm:text-sm">
+                <!-- Сообщения добавляются динамически -->
+            </div>
+
+            <!-- Форма отправки сообщения -->
+            <form id="chatForm" class="pt-3 border-t border-white/10 flex items-center gap-2 shrink-0">
+                <input id="chatInput" type="text" autocomplete="off" placeholder="Написать сообщение..."
+                    class="flex-1 bg-white/10 border border-white/20 focus:border-sky-400 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none transition" />
+                <button type="submit"
+                    class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-400 to-blue-500 hover:brightness-110 active:scale-95 text-gray-950 font-black text-sm transition shadow-lg shadow-sky-500/25 shrink-0">
+                    Отправить
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Секретное меню "КОЧ ГОЛДА 👑" -->
+    <div id="kochGoldaModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden items-center justify-center p-4">
+        <div class="bg-gradient-to-b from-[#231507] via-[#19102c] to-[#120b21] border-2 border-amber-400/70 rounded-3xl p-5 sm:p-6 max-w-lg w-full shadow-[0_0_80px_rgba(250,204,21,0.4)] flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between pb-4 border-b border-amber-400/25 shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl bg-amber-400/20 border border-amber-400/50 flex items-center justify-center text-2xl shadow-inner">
+                        👑
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-lg sm:text-xl font-black text-amber-300 tracking-wide">ПАНЕЛЬ КОЧ ГОЛДА</h3>
+                            <span class="px-2 py-0.5 rounded-md bg-amber-400/25 text-amber-200 text-[10px] font-black uppercase">VIP</span>
+                        </div>
+                        <p class="text-xs text-amber-100/70">Выдача голды, скорость добычи и автоклик</p>
+                    </div>
+                </div>
+                <button id="closeKochModalBtn" type="button" class="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold flex items-center justify-center transition">
+                    ✕
+                </button>
+            </div>
+
+            <!-- Текущие статы -->
+            <div class="grid grid-cols-3 gap-2 my-3.5 p-2.5 rounded-2xl bg-black/40 border border-white/10 text-center shrink-0">
+                <div>
+                    <div class="text-[10px] uppercase text-amber-200/70 font-bold">Голда</div>
+                    <div id="kochStatGold" class="text-sm sm:text-base font-black text-amber-300">0</div>
+                </div>
+                <div class="border-x border-white/10">
+                    <div class="text-[10px] uppercase text-sky-200/70 font-bold">Сила клика</div>
+                    <div id="kochStatPower" class="text-sm sm:text-base font-black text-sky-300">+1</div>
+                </div>
+                <div>
+                    <div class="text-[10px] uppercase text-emerald-200/70 font-bold">Автоклик</div>
+                    <div id="kochStatAuto" class="text-sm sm:text-base font-black text-emerald-300">0/сек</div>
+                </div>
+            </div>
+
+            <!-- Скроллируемая область настроек -->
+            <div class="custom-scroll overflow-y-auto space-y-4 pr-1">
+                <!-- 1. Добавить голду -->
+                <div class="p-3.5 rounded-2xl bg-white/5 border border-amber-400/30">
+                    <div class="flex items-center justify-between mb-2.5">
+                        <span class="text-xs sm:text-sm font-black text-amber-300 flex items-center gap-1.5">
+                            <span>🪙</span> Добавить голду
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 mb-2.5">
+                        <button type="button" data-add-gold="100" class="koch-gold-preset py-2 rounded-xl bg-amber-400/20 hover:bg-amber-400/35 active:scale-95 text-amber-200 font-black text-xs sm:text-sm border border-amber-400/30 transition">
+                            +100 🪙
+                        </button>
+                        <button type="button" data-add-gold="1000" class="koch-gold-preset py-2 rounded-xl bg-amber-400/20 hover:bg-amber-400/35 active:scale-95 text-amber-200 font-black text-xs sm:text-sm border border-amber-400/30 transition">
+                            +1 000 🪙
+                        </button>
+                        <button type="button" data-add-gold="50000" class="koch-gold-preset py-2 rounded-xl bg-amber-400/20 hover:bg-amber-400/35 active:scale-95 text-amber-200 font-black text-xs sm:text-sm border border-amber-400/30 transition">
+                            +50 000 🪙
+                        </button>
+                    </div>
+                    <div class="flex gap-2">
+                        <input id="customGoldInput" type="number" min="1" placeholder="Своё кол-во голды..."
+                            class="flex-1 bg-black/40 border border-white/15 focus:border-amber-400 rounded-xl px-3 py-2 text-xs sm:text-sm text-white placeholder-white/40 focus:outline-none" />
+                        <button id="addCustomGoldBtn" type="button"
+                            class="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 hover:brightness-110 active:scale-95 text-gray-950 font-black text-xs sm:text-sm transition shrink-0">
+                            Выдать
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 2. Скорость добычи (Сила клика) -->
+                <div class="p-3.5 rounded-2xl bg-white/5 border border-sky-400/30">
+                    <div class="flex items-center justify-between mb-2.5">
+                        <span class="text-xs sm:text-sm font-black text-sky-300 flex items-center gap-1.5">
+                            <span>⚡</span> Скорость добычи (Сила клика)
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 mb-2.5">
+                        <button type="button" data-add-power="1" class="koch-power-preset py-2 rounded-xl bg-sky-400/20 hover:bg-sky-400/35 active:scale-95 text-sky-200 font-black text-xs sm:text-sm border border-sky-400/30 transition">
+                            +1 клик
+                        </button>
+                        <button type="button" data-add-power="10" class="koch-power-preset py-2 rounded-xl bg-sky-400/20 hover:bg-sky-400/35 active:scale-95 text-sky-200 font-black text-xs sm:text-sm border border-sky-400/30 transition">
+                            +10 кликов
+                        </button>
+                        <button type="button" data-add-power="100" class="koch-power-preset py-2 rounded-xl bg-sky-400/20 hover:bg-sky-400/35 active:scale-95 text-sky-200 font-black text-xs sm:text-sm border border-sky-400/30 transition">
+                            +100 кликов
+                        </button>
+                    </div>
+                    <div class="flex gap-2">
+                        <input id="customPowerInput" type="number" min="1" placeholder="Добавить силу клика..."
+                            class="flex-1 bg-black/40 border border-white/15 focus:border-sky-400 rounded-xl px-3 py-2 text-xs sm:text-sm text-white placeholder-white/40 focus:outline-none" />
+                        <button id="addCustomPowerBtn" type="button"
+                            class="px-4 py-2 rounded-xl bg-gradient-to-r from-sky-400 to-blue-500 hover:brightness-110 active:scale-95 text-gray-950 font-black text-xs sm:text-sm transition shrink-0">
+                            Добавить
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 3. Скорость автоклика -->
+                <div class="p-3.5 rounded-2xl bg-white/5 border border-emerald-400/30">
+                    <div class="flex items-center justify-between mb-2.5">
+                        <span class="text-xs sm:text-sm font-black text-emerald-300 flex items-center gap-1.5">
+                            <span>🤖</span> Скорость автоклика (в секунду)
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 mb-2.5">
+                        <button type="button" data-add-auto="1" class="koch-auto-preset py-2 rounded-xl bg-emerald-400/20 hover:bg-emerald-400/35 active:scale-95 text-emerald-200 font-black text-xs sm:text-sm border border-emerald-400/30 transition">
+                            +1 / сек
+                        </button>
+                        <button type="button" data-add-auto="10" class="koch-auto-preset py-2 rounded-xl bg-emerald-400/20 hover:bg-emerald-400/35 active:scale-95 text-emerald-200 font-black text-xs sm:text-sm border border-emerald-400/30 transition">
+                            +10 / сек
+                        </button>
+                        <button type="button" data-add-auto="100" class="koch-auto-preset py-2 rounded-xl bg-emerald-400/20 hover:bg-emerald-400/35 active:scale-95 text-emerald-200 font-black text-xs sm:text-sm border border-emerald-400/30 transition">
+                            +100 / сек
+                        </button>
+                    </div>
+                    <div class="flex gap-2">
+                        <input id="customAutoInput" type="number" min="1" placeholder="Добавить автокликов/сек..."
+                            class="flex-1 bg-black/40 border border-white/15 focus:border-emerald-400 rounded-xl px-3 py-2 text-xs sm:text-sm text-white placeholder-white/40 focus:outline-none" />
+                        <button id="addCustomAutoBtn" type="button"
+                            class="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-400 to-green-500 hover:brightness-110 active:scale-95 text-gray-950 font-black text-xs sm:text-sm transition shrink-0">
+                            Добавить
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 4. Бонус добычи голды каждые 10 кликов -->
+                <div class="p-3.5 rounded-2xl bg-white/5 border border-purple-400/30">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs sm:text-sm font-black text-purple-300 flex items-center gap-1.5">
+                            <span>💎</span> Добыча голды за 10 кликов
+                        </span>
+                        <span id="kochStatGoldPerCycle" class="text-xs font-black text-purple-200 bg-purple-500/25 px-2 py-0.5 rounded-md">
+                            Сейчас: +1 🪙
+                        </span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 mb-2.5">
+                        <button type="button" data-add-goldmine="1" class="koch-goldmine-preset py-2 rounded-xl bg-purple-400/20 hover:bg-purple-400/35 active:scale-95 text-purple-200 font-black text-xs sm:text-sm border border-purple-400/30 transition">
+                            +1 🪙/цикл
+                        </button>
+                        <button type="button" data-add-goldmine="5" class="koch-goldmine-preset py-2 rounded-xl bg-purple-400/20 hover:bg-purple-400/35 active:scale-95 text-purple-200 font-black text-xs sm:text-sm border border-purple-400/30 transition">
+                            +5 🪙/цикл
+                        </button>
+                        <button type="button" data-add-goldmine="25" class="koch-goldmine-preset py-2 rounded-xl bg-purple-400/20 hover:bg-purple-400/35 active:scale-95 text-purple-200 font-black text-xs sm:text-sm border border-purple-400/30 transition">
+                            +25 🪙/цикл
+                        </button>
+                    </div>
+                    <div class="flex gap-2">
+                        <input id="customGoldMineInput" type="number" min="1" placeholder="Добавить бонус голды..."
+                            class="flex-1 bg-black/40 border border-white/15 focus:border-purple-400 rounded-xl px-3 py-2 text-xs sm:text-sm text-white placeholder-white/40 focus:outline-none" />
+                        <button id="addCustomGoldMineBtn" type="button"
+                            class="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-400 to-fuchsia-500 hover:brightness-110 active:scale-95 text-gray-950 font-black text-xs sm:text-sm transition shrink-0">
+                            Добавить
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-3.5 mt-3 border-t border-white/10 shrink-0">
+                <button id="resetCheatBonusesBtn" type="button"
+                    class="w-full py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/35 active:scale-95 text-rose-300 border border-rose-500/35 font-bold text-xs sm:text-sm transition">
+                    Сбросить бонусы панели
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно Магазина улучшений -->
+    <div id="shopModal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-[#160e29] border border-amber-400/30 rounded-3xl p-5 sm:p-6 max-w-lg w-full shadow-[0_0_60px_rgba(0,0,0,0.85)] flex flex-col max-h-[88vh]">
+            <div class="flex items-center justify-between pb-4 border-b border-white/10">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-2xl sm:text-3xl">🛒</span>
+                    <div>
+                        <h3 class="text-lg sm:text-xl font-black text-white">Магазин улучшений</h3>
+                        <p class="text-xs text-white/60">Каждые 10 кликов приносят голду</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="px-3 py-1.5 rounded-xl bg-amber-400/15 border border-amber-400/40 text-amber-300 font-black text-sm flex items-center gap-1.5">
+                        <span>🪙</span>
+                        <span id="shopGoldBalance">0</span>
+                    </div>
+                    <button id="closeShopBtn" type="button" class="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold flex items-center justify-center transition">
+                        ✕
+                    </button>
+                </div>
+            </div>
+
+            <!-- Список улучшений -->
+            <div id="upgradesList" class="custom-scroll overflow-y-auto py-4 space-y-3 pr-1">
+                <!-- Карточки улучшений рендерятся через JS -->
+            </div>
+
+            <!-- Специальный музыкальный лот за 100 голды -->
+            <div class="pt-3 border-t border-white/10">
+                <div class="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-fuchsia-950/80 via-purple-900/70 to-amber-950/80 border border-fuchsia-400/50 shadow-[0_0_25px_rgba(217,70,239,0.2)]">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-11 h-11 rounded-xl bg-fuchsia-500/20 border border-fuchsia-400/40 flex items-center justify-center text-2xl shrink-0">
+                            🏍️
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2">
+                                <span class="font-black text-sm sm:text-base text-fuchsia-200 truncate">Трек «Питбайк Газява»</span>
+                                <span class="px-2 py-0.5 rounded-md bg-fuchsia-500/30 text-fuchsia-200 text-[10px] font-black shrink-0">ХИТ</span>
+                            </div>
+                            <p class="text-xs text-white/70 truncate">Врубить бас, рёв мотора и песню на полную!</p>
+                        </div>
+                    </div>
+                    <button id="buyPitbikeSongBtn" type="button"
+                        class="px-3.5 py-2 rounded-xl font-black text-xs sm:text-sm shrink-0 flex items-center gap-1.5 transition bg-gradient-to-r from-fuchsia-400 via-amber-300 to-yellow-400 text-gray-950 hover:brightness-110 active:scale-95 shadow-lg shadow-fuchsia-500/30 cursor-pointer">
+                        <span>🪙</span>
+                        <span>100</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Плавающий плеер песни "Питбайк Газява" -->
+    <div id="pitbikePlayerBanner" class="fixed bottom-16 left-1/2 -translate-x-1/2 z-50 hidden items-center gap-3 bg-gradient-to-r from-fuchsia-950/95 via-purple-950/95 to-amber-950/95 border-2 border-fuchsia-400/80 rounded-2xl px-4 py-2.5 shadow-[0_0_40px_rgba(217,70,239,0.65)] backdrop-blur-xl max-w-[92vw]">
+        <span class="text-2xl animate-bounce">🏍️</span>
+        <div class="leading-tight">
+            <div class="text-[10px] uppercase tracking-widest text-fuchsia-300 font-black">Сейчас играет • 100 🪙</div>
+            <div class="text-xs sm:text-sm font-black text-white">ПИТБАЙК ГАЗЯВА — FULL BASS</div>
+        </div>
+        <button id="stopPitbikeSongBtn" type="button" class="ml-2 px-2.5 py-1 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition">
+            Стоп
+        </button>
+    </div>
+
+    <!-- Модальное окно подтверждения сброса (вместо запрещённого confirm()) -->
+    <div id="resetModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="bg-[#18102c] border border-white/15 rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div class="text-4xl mb-3">🔄</div>
+            <h3 class="text-xl font-black text-white mb-2">Сбросить прогресс?</h3>
+            <p class="text-sm text-white/70 mb-6">Весь накопленный счётчик кликов, голда и улучшения обнулятся. Вы уверены?</p>
+            <div class="flex gap-3">
+                <button id="cancelResetBtn" type="button" class="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition">
+                    Отмена
+                </button>
+                <button id="confirmResetBtn" type="button" class="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold transition shadow-lg shadow-rose-600/30">
+                    Сбросить
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * Инициализация состояния игры и констант
+         */
+        const WORDS = [
+            { text: 'коч', color: '#38bdf8' },                    // Неоновый голубой
+            { text: 'голда', color: '#facc15' },                  // Яркий золотой
+            { text: 'свои свои', color: '#4ade80' },              // Салатовый неон
+            { text: 'ель патрон', color: '#f43f5e' },            // Малиново-красный неон
+            { text: 'БОЛЬНО', color: '#fb7185' },                 // Ярко-алый неон
+            { text: 'СНИМАЙ МЕНЯ НА КАМЕРУ', color: '#c084fc' },  // Фиолетовый неон
+            { text: 'СМАКЧИ ЛЮБА СМАКЧИ', color: '#fb923c' }     // Огненно-оранжевый неон
+        ];
+
+        // Особые фиксированные значимые числа помимо степеней десятки (10, 100, 1000...)
+        const SPECIAL_MILESTONES = [42, 67, 1488];
+        const CLICKS_PER_GOLD = 10; // За каждые 10 кликов начисляется голда
+
+        // Праздничные словосочетания, выпадающие на юбилейных цифрах
+        const CELEBRATION_PHRASES = [
+            'ТАНЦУЙ ПАНТЕРА',
+            'КОЧ БРАТААААН',
+            'ПИЗДА ТЕБЕ',
+            'ГОЛДААААААА',
+            'ЕЛЬ ПАТРОН'
+        ];
+
+        // Конфигурация улучшений в магазине
+        const UPGRADE_DEFS = [
+            {
+                id: 'doubleClick',
+                icon: '✌️',
+                name: 'Двойное нажатие',
+                desc: '+1 к силе каждого клика',
+                baseCost: 5,
+                costScale: 1.65
+            },
+            {
+                id: 'autoClicker',
+                icon: '🤖',
+                name: 'Автокликер',
+                desc: '+1 автоматический клик в секунду',
+                baseCost: 10,
+                costScale: 1.75
+            },
+            {
+                id: 'goldMine',
+                icon: '🪙',
+                name: 'Золотая жила',
+                desc: '+1 дополнительная голда каждые 10 кликов',
+                baseCost: 18,
+                costScale: 1.9
+            },
+            {
+                id: 'pantherPower',
+                icon: '🐆',
+                name: 'Ярость Пантеры',
+                desc: '+5 к силе каждого клика сразу',
+                baseCost: 45,
+                costScale: 2.0
+            },
+            {
+                id: 'turboBot',
+                icon: '🚀',
+                name: 'Турбо-ферма',
+                desc: '+5 автоматических кликов в секунду',
+                baseCost: 75,
+                costScale: 2.1
+            }
+        ];
+
+        // Загружаем сохранённый прогресс из localStorage (если есть)
+        let count = parseInt(localStorage.getItem('panther_clicker_count') || '0', 10);
+        if (isNaN(count) || count < 0) count = 0;
+
+        let gold = parseInt(localStorage.getItem('panther_clicker_gold') || '0', 10);
+        if (isNaN(gold) || gold < 0) gold = 0;
+
+        let goldProgressClicks = parseInt(localStorage.getItem('panther_clicker_gold_prog') || '0', 10);
+        if (isNaN(goldProgressClicks) || goldProgressClicks < 0) goldProgressClicks = 0;
+
+        let upgrades = {
+            doubleClick: 0,
+            autoClicker: 0,
+            goldMine: 0,
+            pantherPower: 0,
+            turboBot: 0
+        };
+        try {
+            const savedUpgrades = JSON.parse(localStorage.getItem('panther_clicker_upgrades') || '{}');
+            if (savedUpgrades && typeof savedUpgrades === 'object') {
+                upgrades = { ...upgrades, ...savedUpgrades };
+            }
+        } catch (e) {}
+
+        // Бонусы из панели КОЧ ГОЛДА
+        let cheatBonuses = {
+            clickPower: 0,
+            autoClick: 0,
+            goldMine: 0
+        };
+        try {
+            const savedCheats = JSON.parse(localStorage.getItem('panther_clicker_cheats') || '{}');
+            if (savedCheats && typeof savedCheats === 'object') {
+                cheatBonuses = {
+                    clickPower: parseInt(savedCheats.clickPower || '0', 10) || 0,
+                    autoClick: parseInt(savedCheats.autoClick || '0', 10) || 0,
+                    goldMine: parseInt(savedCheats.goldMine || '0', 10) || 0
+                };
+            }
+        } catch (e) {}
+
+        // Запоминаем максимальный достигнутый рубеж, чтобы при перепрыгивании (из-за x2/x5 клика) праздник всё равно сработал
+        let lastCelebratedMilestone = parseInt(localStorage.getItem('panther_clicker_last_milestone') || '0', 10);
+        if (isNaN(lastCelebratedMilestone) || lastCelebratedMilestone < 0) lastCelebratedMilestone = 0;
+
+        let isMuted = localStorage.getItem('panther_clicker_muted') === 'true';
+        let audioCtx = null;
+        let celebrationTimeout = null;
+        let pressVisualTimeout = null;
+
+        // Ссылки на ключевые DOM-элементы
+        const counterDisplay = document.getElementById('counterDisplay');
+        const goldDisplay = document.getElementById('goldDisplay');
+        const shopGoldBalance = document.getElementById('shopGoldBalance');
+        const clickPowerBadge = document.getElementById('clickPowerBadge');
+        const autoClickBadge = document.getElementById('autoClickBadge');
+        const clicksToGoldBadge = document.getElementById('clicksToGoldBadge');
+        const clickerBtn = document.getElementById('clickerBtn');
+        const buttonWrapper = document.getElementById('buttonWrapper');
+        const nextMilestoneText = document.getElementById('nextMilestoneText');
+        const progressBar = document.getElementById('progressBar');
+        const progressPercent = document.getElementById('progressPercent');
+        const lastWordDisplay = document.getElementById('lastWordDisplay');
+        const milestonesCountDisplay = document.getElementById('milestonesCountDisplay');
+        const muteBtn = document.getElementById('muteBtn');
+        const soundIcon = document.getElementById('soundIcon');
+        const shopBtn = document.getElementById('shopBtn');
+        const inlineShopLink = document.getElementById('inlineShopLink');
+        const shopBadge = document.getElementById('shopBadge');
+        const shopModal = document.getElementById('shopModal');
+        const closeShopBtn = document.getElementById('closeShopBtn');
+        const upgradesList = document.getElementById('upgradesList');
+        const buyPitbikeSongBtn = document.getElementById('buyPitbikeSongBtn');
+        const pitbikePlayerBanner = document.getElementById('pitbikePlayerBanner');
+        const stopPitbikeSongBtn = document.getElementById('stopPitbikeSongBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const resetModal = document.getElementById('resetModal');
+        const cancelResetBtn = document.getElementById('cancelResetBtn');
+        const confirmResetBtn = document.getElementById('confirmResetBtn');
+        const celebrationOverlay = document.getElementById('celebrationOverlay');
+        const celebrationCard = document.getElementById('celebrationCard');
+        const celebrationPhraseTitle = document.getElementById('celebrationPhraseTitle');
+        const milestoneReachedNumber = document.getElementById('milestoneReachedNumber');
+
+        // Элементы чата и секретной панели КОЧ ГОЛДА
+        const kochQuickBtn = document.getElementById('kochQuickBtn');
+        const chatBtn = document.getElementById('chatBtn');
+        const chatModal = document.getElementById('chatModal');
+        const closeChatBtn = document.getElementById('closeChatBtn');
+        const chatMessages = document.getElementById('chatMessages');
+        const chatForm = document.getElementById('chatForm');
+        const chatInput = document.getElementById('chatInput');
+        const kochGoldaModal = document.getElementById('kochGoldaModal');
+        const closeKochModalBtn = document.getElementById('closeKochModalBtn');
+        const kochStatGold = document.getElementById('kochStatGold');
+        const kochStatPower = document.getElementById('kochStatPower');
+        const kochStatAuto = document.getElementById('kochStatAuto');
+        const kochStatGoldPerCycle = document.getElementById('kochStatGoldPerCycle');
+        const customGoldInput = document.getElementById('customGoldInput');
+        const addCustomGoldBtn = document.getElementById('addCustomGoldBtn');
+        const customPowerInput = document.getElementById('customPowerInput');
+        const addCustomPowerBtn = document.getElementById('addCustomPowerBtn');
+        const customAutoInput = document.getElementById('customAutoInput');
+        const addCustomAutoBtn = document.getElementById('addCustomAutoBtn');
+        const customGoldMineInput = document.getElementById('customGoldMineInput');
+        const addCustomGoldMineBtn = document.getElementById('addCustomGoldMineBtn');
+        const resetCheatBonusesBtn = document.getElementById('resetCheatBonusesBtn');
+
+        /**
+         * Расчёт текущих характеристик и стоимости улучшений
+         */
+        function getClickPower() {
+            return 1 + (upgrades.doubleClick || 0) + (upgrades.pantherPower || 0) * 5 + (cheatBonuses.clickPower || 0);
+        }
+
+        function getAutoClicksPerSec() {
+            return (upgrades.autoClicker || 0) + (upgrades.turboBot || 0) * 5 + (cheatBonuses.autoClick || 0);
+        }
+
+        function getGoldRewardPerCycle() {
+            return 1 + (upgrades.goldMine || 0) + (cheatBonuses.goldMine || 0);
+        }
+
+        function getUpgradeCost(def) {
+            const lvl = upgrades[def.id] || 0;
+            return Math.floor(def.baseCost * Math.pow(def.costScale, lvl));
+        }
+
+        function saveState() {
+            localStorage.setItem('panther_clicker_count', count.toString());
+            localStorage.setItem('panther_clicker_gold', gold.toString());
+            localStorage.setItem('panther_clicker_gold_prog', goldProgressClicks.toString());
+            localStorage.setItem('panther_clicker_upgrades', JSON.stringify(upgrades));
+            localStorage.setItem('panther_clicker_cheats', JSON.stringify(cheatBonuses));
+            localStorage.setItem('panther_clicker_last_milestone', lastCelebratedMilestone.toString());
+        }
+
+        /**
+         * Инициализация Web Audio API и звуковых эффектов
+         */
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (AudioContextClass) {
+                    audioCtx = new AudioContextClass();
+                }
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playClickSound() {
+            if (isMuted) return;
+            initAudio();
+            if (!audioCtx) return;
+
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(320 + Math.random() * 140, now);
+            osc.frequency.exponentialRampToValueAtTime(110, now + 0.07);
+            gain.gain.setValueAtTime(0.18, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now);
+            osc.stop(now + 0.09);
+        }
+
+        function playCoinSound() {
+            if (isMuted) return;
+            initAudio();
+            if (!audioCtx) return;
+
+            const now = audioCtx.currentTime;
+            [987.77, 1318.51].forEach((freq, idx) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, now + idx * 0.07);
+                gain.gain.setValueAtTime(0.2, now + idx * 0.07);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.07 + 0.22);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now + idx * 0.07);
+                osc.stop(now + idx * 0.07 + 0.24);
+            });
+        }
+
+        /**
+         * Тревожный низкий звук для команды "аморально"
+         */
+        function playAmoralSound() {
+            if (isMuted) return;
+            initAudio();
+            if (!audioCtx) return;
+
+            const now = audioCtx.currentTime;
+            const notes = [220, 185, 146.83, 110];
+            notes.forEach((freq, idx) => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(freq, now + idx * 0.14);
+                osc.frequency.exponentialRampToValueAtTime(freq * 0.72, now + idx * 0.14 + 0.25);
+                gain.gain.setValueAtTime(0.24, now + idx * 0.14);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.14 + 0.28);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now + idx * 0.14);
+                osc.stop(now + idx * 0.14 + 0.3);
+            });
+        }
+
+        /**
+         * Синтезатор звуков пердежа для команды "валя"
+         */
+        function triggerValyaFartSounds() {
+            for (let c = 0; c < 18; c++) {
+                setTimeout(() => {
+                    const cloud = document.createElement('div');
+                    cloud.className = 'gas-cloud text-4xl sm:text-6xl';
+                    cloud.textContent = '💨';
+                    const startX = window.innerWidth * (0.15 + Math.random() * 0.7);
+                    const startY = window.innerHeight * (0.2 + Math.random() * 0.65);
+                    cloud.style.left = `${startX}px`;
+                    cloud.style.top = `${startY}px`;
+                    cloud.style.setProperty('--gx', `${(Math.random() - 0.5) * 240}px`);
+                    cloud.style.setProperty('--gy', `${-90 - Math.random() * 140}px`);
+                    document.body.appendChild(cloud);
+                    cloud.addEventListener('animationend', () => cloud.remove());
+                }, c * 140);
+            }
+
+            document.body.classList.remove('shake-screen');
+            void document.body.offsetWidth;
+            document.body.classList.add('shake-screen');
+
+            if (isMuted) return;
+            initAudio();
+            if (!audioCtx) return;
+
+            const bursts = [
+                { delay: 0.0, duration: 0.36, baseFreq: 78, modFreq: 26, modDepth: 34, type: 'sawtooth' },
+                { delay: 0.44, duration: 0.58, baseFreq: 64, modFreq: 21, modDepth: 42, type: 'square' },
+                { delay: 1.12, duration: 0.25, baseFreq: 96, modFreq: 33, modDepth: 28, type: 'sawtooth' },
+                { delay: 1.46, duration: 0.85, baseFreq: 56, modFreq: 17, modDepth: 48, type: 'sawtooth' },
+                { delay: 2.42, duration: 0.42, baseFreq: 72, modFreq: 29, modDepth: 36, type: 'square' }
+            ];
+
+            bursts.forEach(b => {
+                const start = audioCtx.currentTime + b.delay;
+                const end = start + b.duration;
+
+                const mainOsc = audioCtx.createOscillator();
+                const lfoOsc = audioCtx.createOscillator();
+                const lfoGain = audioCtx.createGain();
+                const filter = audioCtx.createBiquadFilter();
+                const masterGain = audioCtx.createGain();
+
+                mainOsc.type = b.type;
+                mainOsc.frequency.setValueAtTime(b.baseFreq * 1.25, start);
+                mainOsc.frequency.exponentialRampToValueAtTime(b.baseFreq * 0.62, end);
+
+                lfoOsc.type = 'triangle';
+                lfoOsc.frequency.setValueAtTime(b.modFreq, start);
+                lfoOsc.frequency.linearRampToValueAtTime(b.modFreq * 0.65, end);
+                lfoGain.gain.setValueAtTime(b.modDepth, start);
+
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(340, start);
+                filter.Q.setValueAtTime(5.5, start);
+
+                masterGain.gain.setValueAtTime(0.001, start);
+                masterGain.gain.linearRampToValueAtTime(0.38, start + 0.04);
+                masterGain.gain.setValueAtTime(0.34, end - 0.08);
+                masterGain.gain.exponentialRampToValueAtTime(0.001, end);
+
+                lfoOsc.connect(lfoGain);
+                lfoGain.connect(mainOsc.frequency);
+
+                mainOsc.connect(filter);
+                filter.connect(masterGain);
+                masterGain.connect(audioCtx.destination);
+
+                mainOsc.start(start);
+                lfoOsc.start(start);
+                mainOsc.stop(end + 0.02);
+                lfoOsc.stop(end + 0.02);
+            });
+        }
+
+        /**
+         * Массовый спам дизлайков и обнуление счётчика для команды "аморально"
+         */
+        function triggerAmoralEffect() {
+            count = 0;
+            goldProgressClicks = 0;
+            lastCelebratedMilestone = 0;
+            saveState();
+            updateUI();
+
+            playAmoralSound();
+
+            document.body.classList.remove('shake-screen');
+            void document.body.offsetWidth;
+            document.body.classList.add('shake-screen');
+
+            for (let i = 0; i < 70; i++) {
+                const dislike = document.createElement('div');
+                dislike.className = 'dislike-rain';
+                dislike.textContent = '👎';
+                dislike.style.left = `${Math.random() * 96}vw`;
+                dislike.style.fontSize = `${24 + Math.random() * 34}px`;
+                dislike.style.animationDuration = `${1.3 + Math.random() * 1.6}s`;
+                dislike.style.animationDelay = `${Math.random() * 0.9}s`;
+
+                document.body.appendChild(dislike);
+                dislike.addEventListener('animationend', () => dislike.remove());
+            }
+        }
+
+        function playCelebrationAudio(phrase = 'ТАНЦУЙ ПАНТЕРА') {
+            if (isMuted) return;
+            initAudio();
+
+            if (audioCtx) {
+                const now = audioCtx.currentTime;
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, i) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(freq, now + i * 0.11);
+                    gain.gain.setValueAtTime(0.18, now + i * 0.11);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.11 + 0.45);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + i * 0.11);
+                    osc.stop(now + i * 0.11 + 0.48);
+                });
+            }
+
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(phrase);
+                utterance.lang = 'ru-RU';
+                utterance.rate = 1.05;
+                utterance.pitch = 1.2;
+                const voices = window.speechSynthesis.getVoices();
+                const ruVoice = voices.find(v => v.lang && v.lang.toLowerCase().includes('ru'));
+                if (ruVoice) utterance.voice = ruVoice;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        /**
+         * Генерация конфетти при праздновании
+         */
+        function spawnConfetti() {
+            const colors = ['#facc15', '#f43f5e', '#38bdf8', '#4ade80', '#c084fc', '#fb923c'];
+            for (let i = 0; i < 45; i++) {
+                const piece = document.createElement('div');
+                piece.className = 'confetti-piece';
+                piece.style.left = `${Math.random() * 100}vw`;
+                piece.style.width = `${8 + Math.random() * 8}px`;
+                piece.style.height = `${12 + Math.random() * 12}px`;
+                piece.style.backgroundColor = colors[i % colors.length];
+                piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '3px';
+                piece.style.animationDuration = `${1.8 + Math.random() * 1.8}s`;
+                piece.style.animationDelay = `${Math.random() * 0.35}s`;
+
+                document.body.appendChild(piece);
+                piece.addEventListener('animationend', () => piece.remove());
+            }
+        }
+
+        /**
+         * Празднование при достижении значимой цифры (10, 42, 67, 100, 1000, 1488...)
+         */
+        function triggerMilestoneCelebration(milestoneNum) {
+            const phrase = CELEBRATION_PHRASES[Math.floor(Math.random() * CELEBRATION_PHRASES.length)];
+            playCelebrationAudio(phrase);
+            spawnConfetti();
+
+            document.body.classList.remove('shake-screen');
+            void document.body.offsetWidth;
+            document.body.classList.add('shake-screen');
+
+            celebrationPhraseTitle.textContent = phrase;
+            milestoneReachedNumber.textContent = formatNumber(milestoneNum);
+            celebrationOverlay.classList.remove('hidden');
+
+            celebrationCard.classList.remove('celebration-card');
+            void celebrationCard.offsetWidth;
+            celebrationCard.classList.add('celebration-card');
+
+            if (celebrationTimeout) {
+                clearTimeout(celebrationTimeout);
+            }
+            celebrationTimeout = setTimeout(() => {
+                celebrationOverlay.classList.add('hidden');
+            }, 3400);
+        }
+
+        /**
+         * Синхронизация интерфейса со счётчиком и прогрессом
+         */
+        function updateUI() {
+            counterDisplay.textContent = formatNumber(count);
+            goldDisplay.textContent = formatNumber(gold);
+            shopGoldBalance.textContent = formatNumber(gold);
+
+            const currentPower = getClickPower();
+            const currentAuto = getAutoClicksPerSec();
+            const currentGoldPerCycle = getGoldRewardPerCycle();
+
+            clickPowerBadge.textContent = `+${formatNumber(currentPower)}`;
+            autoClickBadge.textContent = `${formatNumber(currentAuto)}/сек`;
+            const remainingForGold = CLICKS_PER_GOLD - (goldProgressClicks % CLICKS_PER_GOLD);
+            clicksToGoldBadge.textContent = remainingForGold.toString();
+
+            if (kochStatGold) kochStatGold.textContent = formatNumber(gold);
+            if (kochStatPower) kochStatPower.textContent = `+${formatNumber(currentPower)}`;
+            if (kochStatAuto) kochStatAuto.textContent = `${formatNumber(currentAuto)}/сек`;
+            if (kochStatGoldPerCycle) kochStatGoldPerCycle.textContent = `Сейчас: +${formatNumber(currentGoldPerCycle)} 🪙`;
+
+            const { nextTarget, passedCount, progress } = getMilestoneInfo(count);
+            nextMilestoneText.textContent = `${formatNumber(nextTarget)} кликов`;
+            progressBar.style.width = `${progress}%`;
+            progressPercent.textContent = `${progress}%`;
+            milestonesCountDisplay.textContent = passedCount.toString();
+
+            const canAffordAny = UPGRADE_DEFS.some(def => gold >= getUpgradeCost(def)) || gold >= 100;
+            if (canAffordAny) {
+                shopBadge.classList.remove('hidden');
+            } else {
+                shopBadge.classList.add('hidden');
+            }
+
+            if (buyPitbikeSongBtn) {
+                const canAffordSong = gold >= 100;
+                buyPitbikeSongBtn.disabled = !canAffordSong;
+                buyPitbikeSongBtn.className = `px-3.5 py-2 rounded-xl font-black text-xs sm:text-sm shrink-0 flex items-center gap-1.5 transition ${
+                    canAffordSong
+                        ? 'bg-gradient-to-r from-fuchsia-400 via-amber-300 to-yellow-400 text-gray-950 hover:brightness-110 active:scale-95 shadow-lg shadow-fuchsia-500/30 cursor-pointer'
+                        : 'bg-white/10 text-white/40 cursor-not-allowed'
+                }`;
+            }
+
+            soundIcon.textContent = isMuted ? '🔇' : '🔊';
+            if (!shopModal.classList.contains('hidden')) {
+                renderShop();
+            }
+        }
+
+        /**
+         * Отрисовка списка улучшений в магазине
+         */
+        function renderShop() {
+            upgradesList.innerHTML = '';
+            UPGRADE_DEFS.forEach(def => {
+                const lvl = upgrades[def.id] || 0;
+                const cost = getUpgradeCost(def);
+                const canAfford = gold >= cost;
+
+                const card = document.createElement('div');
+                card.className = `flex items-center justify-between gap-3 p-3.5 rounded-2xl border transition ${
+                    canAfford
+                        ? 'bg-white/10 border-amber-400/40 hover:bg-white/15'
+                        : 'bg-white/5 border-white/10 opacity-75'
+                }`;
+
+                card.innerHTML = `
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-11 h-11 rounded-xl bg-amber-400/15 border border-amber-400/30 flex items-center justify-center text-2xl shrink-0">
+                            ${def.icon}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2">
+                                <span class="font-black text-sm sm:text-base text-white truncate">${def.name}</span>
+                                <span class="px-2 py-0.5 rounded-md bg-purple-500/25 text-purple-200 text-[10px] font-black shrink-0">Ур. ${lvl}</span>
+                            </div>
+                            <p class="text-xs text-white/65 truncate">${def.desc}</p>
+                        </div>
+                    </div>
+                    <button type="button" data-upgrade-id="${def.id}" ${canAfford ? '' : 'disabled'}
+                        class="px-3.5 py-2 rounded-xl font-black text-xs sm:text-sm shrink-0 flex items-center gap-1.5 transition ${
+                            canAfford
+                                ? 'bg-gradient-to-r from-amber-400 to-yellow-500 text-gray-950 hover:brightness-110 active:scale-95 shadow-lg shadow-amber-500/25 cursor-pointer'
+                                : 'bg-white/10 text-white/40 cursor-not-allowed'
+                        }">
+                        <span>🪙</span>
+                        <span>${formatNumber(cost)}</span>
+                    </button>
+                `;
+
+                const buyBtn = card.querySelector('button');
+                buyBtn.addEventListener('click', () => buyUpgrade(def.id));
+                upgradesList.appendChild(card);
+            });
+        }
+
+        /**
+         * Покупка улучшения за накопленную голду
+         */
+        function buyUpgrade(upgradeId) {
+            const def = UPGRADE_DEFS.find(u => u.id === upgradeId);
+            if (!def) return;
+            const cost = getUpgradeCost(def);
+            if (gold < cost) return;
+
+            gold -= cost;
+            upgrades[upgradeId] = (upgrades[upgradeId] || 0) + 1;
+            saveState();
+            playCoinSound();
+            updateUI();
+        }
+
+        /**
+         * Покупка и запуск песни «Питбайк Газява» за 100 голды
+         */
+        let pitbikeSongTimer = null;
+        let pitbikeBeatInterval = null;
+
+        function stopPitbikeSong() {
+            if (pitbikeSongTimer) {
+                clearTimeout(pitbikeSongTimer);
+                pitbikeSongTimer = null;
+            }
+            if (pitbikeBeatInterval) {
+                clearInterval(pitbikeBeatInterval);
+                pitbikeBeatInterval = null;
+            }
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+            pitbikePlayerBanner.classList.add('hidden');
+            pitbikePlayerBanner.classList.remove('flex');
+        }
+
+        function playPitbikeGazyavaSong() {
+            if (gold < 100) return;
+            gold -= 100;
+            saveState();
+            updateUI();
+            closeShop();
+
+            stopPitbikeSong();
+
+            if (isMuted) {
+                isMuted = false;
+                localStorage.setItem('panther_clicker_muted', 'false');
+                updateUI();
+            }
+
+            initAudio();
+            spawnConfetti();
+
+            pitbikePlayerBanner.classList.remove('hidden');
+            pitbikePlayerBanner.classList.add('flex');
+
+            let step = 0;
+            const bassNotes = [65.41, 65.41, 77.78, 87.31, 65.41, 65.41, 98.00, 87.31];
+
+            function playBeatStep() {
+                if (!audioCtx) return;
+                const now = audioCtx.currentTime;
+
+                const kickOsc = audioCtx.createOscillator();
+                const kickGain = audioCtx.createGain();
+                kickOsc.type = 'sine';
+                kickOsc.frequency.setValueAtTime(140, now);
+                kickOsc.frequency.exponentialRampToValueAtTime(38, now + 0.14);
+                kickGain.gain.setValueAtTime(0.38, now);
+                kickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+                kickOsc.connect(kickGain);
+                kickGain.connect(audioCtx.destination);
+                kickOsc.start(now);
+                kickOsc.stop(now + 0.19);
+
+                const bassOsc = audioCtx.createOscillator();
+                const bassGain = audioCtx.createGain();
+                bassOsc.type = 'sawtooth';
+                const freq = bassNotes[step % bassNotes.length];
+                bassOsc.frequency.setValueAtTime(freq, now);
+                if (step % 4 === 3) {
+                    bassOsc.frequency.linearRampToValueAtTime(freq * 1.9, now + 0.18);
+                }
+                bassGain.gain.setValueAtTime(0.16, now);
+                bassGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+                bassOsc.connect(bassGain);
+                bassGain.connect(audioCtx.destination);
+                bassOsc.start(now);
+                bassOsc.stop(now + 0.25);
+
+                if (step % 2 === 0) {
+                    const bellOsc = audioCtx.createOscillator();
+                    const bellGain = audioCtx.createGain();
+                    bellOsc.type = 'square';
+                    bellOsc.frequency.setValueAtTime(freq * 8, now);
+                    bellGain.gain.setValueAtTime(0.07, now);
+                    bellGain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+                    bellOsc.connect(bellGain);
+                    bellGain.connect(audioCtx.destination);
+                    bellOsc.start(now);
+                    bellOsc.stop(now + 0.12);
+                }
+
+                step++;
+            }
+
+            playBeatStep();
+            pitbikeBeatInterval = setInterval(playBeatStep, 230);
+
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const lyrics = [
+                    'Врум-врум! Питбайк газява, летим на заднем колесе!',
+                    'Питбайк газява! Полный газ, дым из-под резины!',
+                    'Газява, газява, питбайк ревёт, танцуй пантера!'
+                ];
+                const utterance = new SpeechSynthesisUtterance(lyrics.join(' '));
+                utterance.lang = 'ru-RU';
+                utterance.rate = 1.12;
+                utterance.pitch = 1.15;
+                utterance.volume = 1.0;
+
+                const voices = window.speechSynthesis.getVoices();
+                const ruVoice = voices.find(v => v.lang && v.lang.toLowerCase().includes('ru'));
+                if (ruVoice) {
+                    utterance.voice = ruVoice;
+                }
+                window.speechSynthesis.speak(utterance);
+            }
+
+            pitbikeSongTimer = setTimeout(() => {
+                stopPitbikeSong();
+            }, 13500);
+        }
+
+        buyPitbikeSongBtn.addEventListener('click', playPitbikeGazyavaSong);
+        stopPitbikeSongBtn.addEventListener('click', stopPitbikeSong);
+
+        /**
+         * Всплывающий индикатор получения голды
+         */
+        function spawnGoldPopup(amount, x, y) {
+            const popup = document.createElement('div');
+            popup.className = 'gold-popup text-base sm:text-xl';
+            popup.textContent = `+${formatNumber(amount)} 🪙 ГОЛДА!`;
+            popup.style.left = `${x}px`;
+            popup.style.top = `${y - 24}px`;
+            document.body.appendChild(popup);
+            popup.addEventListener('animationend', () => popup.remove());
+        }
+
+        /**
+         * Вылетающее случайное слово с разлётом на 360 градусов
+         */
+        function spawnFloatingWord(x, y) {
+            const wordObj = WORDS[Math.floor(Math.random() * WORDS.length)];
+            lastWordDisplay.textContent = wordObj.text;
+            lastWordDisplay.style.color = wordObj.color;
+
+            const el = document.createElement('div');
+            el.className = 'floating-word text-lg sm:text-2xl';
+            el.textContent = wordObj.text;
+            el.style.color = wordObj.color;
+            el.style.left = `${x}px`;
+            el.style.top = `${y}px`;
+
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 110 + Math.random() * 140;
+            const dx = Math.cos(angle) * distance;
+            const dy = Math.sin(angle) * distance - 30;
+            const rotStart = (Math.random() - 0.5) * 24;
+            const rotMid = (Math.random() - 0.5) * 32;
+            const rotEnd = (Math.random() - 0.5) * 45;
+
+            el.style.setProperty('--dx', `${dx}px`);
+            el.style.setProperty('--dy', `${dy}px`);
+            el.style.setProperty('--rot-start', `${rotStart}deg`);
+            el.style.setProperty('--rot-mid', `${rotMid}deg`);
+            el.style.setProperty('--rot-end', `${rotEnd}deg`);
+
+            document.body.appendChild(el);
+            el.addEventListener('animationend', () => el.remove());
+        }
+
+        /**
+         * Искры и ударная волна при нажатии на кнопку
+         */
+        function spawnClickEffects(x, y) {
+            const ripple = document.createElement('div');
+            ripple.className = 'click-ripple';
+            buttonWrapper.appendChild(ripple);
+            ripple.addEventListener('animationend', () => ripple.remove());
+
+            const sparkColors = ['#fde047', '#f59e0b', '#38bdf8', '#f43f5e', '#4ade80'];
+            for (let i = 0; i < 8; i++) {
+                const spark = document.createElement('div');
+                spark.className = 'click-spark';
+                spark.style.left = `${x}px`;
+                spark.style.top = `${y}px`;
+                spark.style.backgroundColor = sparkColors[i % sparkColors.length];
+
+                const angle = (Math.PI * 2 * i) / 8 + (Math.random() - 0.5) * 0.4;
+                const dist = 45 + Math.random() * 65;
+                spark.style.setProperty('--tx', `${Math.cos(angle) * dist}px`);
+                spark.style.setProperty('--ty', `${Math.sin(angle) * dist}px`);
+
+                document.body.appendChild(spark);
+                spark.addEventListener('animationend', () => spark.remove());
+            }
+        }
+
+        /**
+         * Форматирование больших чисел с пробелами
+         */
+        function formatNumber(num) {
+            return Math.floor(num).toLocaleString('ru-RU');
+        }
+
+        /**
+         * Расчёт следующей значимой цели (степени 10 + особые числа 42, 67, 1488)
+         */
+        function getAllMilestonesUpTo(maxVal) {
+            const set = new Set(SPECIAL_MILESTONES);
+            let p = 10;
+            while (p <= Math.max(maxVal * 10, 10000)) {
+                set.add(p);
+                p *= 10;
+            }
+            return Array.from(set).sort((a, b) => a - b);
+        }
+
+        function getMilestoneInfo(currentCount) {
+            const milestones = getAllMilestonesUpTo(currentCount);
+            let prevTarget = 0;
+            let nextTarget = milestones[0];
+            let passedCount = 0;
+
+            for (let i = 0; i < milestones.length; i++) {
+                if (currentCount >= milestones[i]) {
+                    prevTarget = milestones[i];
+                    passedCount++;
+                } else {
+                    nextTarget = milestones[i];
+                    break;
+                }
+            }
+
+            const span = nextTarget - prevTarget;
+            const progress = span > 0 ? Math.min(100, Math.max(0, Math.floor(((currentCount - prevTarget) / span) * 100))) : 100;
+            return { nextTarget, passedCount, progress };
+        }
+
+        /**
+         * Проверка пересечения юбилейных рубежей и начисление голды
+         */
+        function processCountGain(prevCount, newCount, x, y) {
+            const gained = newCount - prevCount;
+            if (gained <= 0) return;
+
+            goldProgressClicks += gained;
+            if (goldProgressClicks >= CLICKS_PER_GOLD) {
+                const cycles = Math.floor(goldProgressClicks / CLICKS_PER_GOLD);
+                goldProgressClicks %= CLICKS_PER_GOLD;
+                const goldEarned = cycles * getGoldRewardPerCycle();
+                gold += goldEarned;
+                playCoinSound();
+                spawnGoldPopup(goldEarned, x, y);
+            }
+
+            const milestones = getAllMilestonesUpTo(newCount);
+            let triggeredMilestone = null;
+            for (const m of milestones) {
+                if (m > lastCelebratedMilestone && newCount >= m) {
+                    triggeredMilestone = m;
+                    lastCelebratedMilestone = m;
+                }
+            }
+
+            if (triggeredMilestone !== null) {
+                triggerMilestoneCelebration(triggeredMilestone);
+            }
+        }
+
+        /**
+         * Основное действие клика (ручного или автоматического)
+         */
+        function handleActionClick(clientX, clientY, isAuto = false) {
+            const rect = clickerBtn.getBoundingClientRect();
+            const x = typeof clientX === 'number' ? clientX : rect.left + rect.width / 2;
+            const y = typeof clientY === 'number' ? clientY : rect.top + rect.height / 2;
+
+            const power = isAuto ? getAutoClicksPerSec() : getClickPower();
+            if (power <= 0) return;
+
+            const prevCount = count;
+            count += power;
+
+            if (!isAuto) {
+                playClickSound();
+                spawnFloatingWord(x, y);
+                spawnClickEffects(x, y);
+
+                clickerBtn.classList.add('pressed');
+                if (pressVisualTimeout) clearTimeout(pressVisualTimeout);
+                pressVisualTimeout = setTimeout(() => {
+                    clickerBtn.classList.remove('pressed');
+                }, 110);
+
+                counterDisplay.style.transform = 'scale(1.07)';
+                setTimeout(() => {
+                    counterDisplay.style.transform = 'scale(1)';
+                }, 75);
+            }
+
+            processCountGain(prevCount, count, x, y);
+            saveState();
+            updateUI();
+        }
+
+        // ==========================================
+        // ЛОГИКА ОБЫЧНОГО ИГРОВОГО ЧАТА И КОМАНД
+        // ==========================================
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function appendChatMessage(author, text, variant = 'user') {
+            const wrapper = document.createElement('div');
+            if (variant === 'user') {
+                wrapper.className = 'flex flex-col items-end';
+                wrapper.innerHTML = `
+                    <div class="max-w-[85%] rounded-2xl rounded-tr-sm bg-sky-500/25 border border-sky-400/40 px-3.5 py-2 text-white">
+                        <div class="text-[10px] font-black text-sky-300 mb-0.5">${escapeHtml(author)}</div>
+                        <div class="break-words leading-snug">${escapeHtml(text)}</div>
+                    </div>
+                `;
+            } else {
+                wrapper.className = 'flex flex-col items-start';
+                wrapper.innerHTML = `
+                    <div class="max-w-[88%] rounded-2xl rounded-tl-sm bg-white/10 border border-white/15 px-3.5 py-2 text-white/90">
+                        <div class="text-[10px] font-black text-amber-300 mb-0.5">${escapeHtml(author)}</div>
+                        <div class="break-words leading-snug">${escapeHtml(text)}</div>
+                    </div>
+                `;
+            }
+            chatMessages.appendChild(wrapper);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function openChat() {
+            closeShop();
+            closeKochModal();
+            chatModal.classList.remove('hidden');
+            chatModal.classList.add('flex');
+            setTimeout(() => chatInput.focus(), 30);
+        }
+
+        function closeChat() {
+            chatModal.classList.add('hidden');
+            chatModal.classList.remove('flex');
+        }
+
+        function openKochModal() {
+            closeShop();
+            closeChat();
+            if (kochQuickBtn) {
+                kochQuickBtn.classList.remove('hidden');
+                kochQuickBtn.classList.add('flex');
+            }
+            updateUI();
+            kochGoldaModal.classList.remove('hidden');
+            kochGoldaModal.classList.add('flex');
+        }
+
+        function closeKochModal() {
+            kochGoldaModal.classList.add('hidden');
+            kochGoldaModal.classList.remove('flex');
+        }
+
+        function handleChatSubmit(rawMessage) {
+            const trimmed = rawMessage.trim();
+            if (!trimmed) return;
+
+            appendChatMessage('Игрок', trimmed, 'user');
+
+            const normalized = trimmed.replace(/\s+/g, ' ').toLowerCase();
+
+            // Скрытая команда: "коч голда"
+            if (normalized === 'коч голда' || normalized === 'кочголда') {
+                playCoinSound();
+                spawnConfetti();
+                appendChatMessage('Система', '👑 Доступ открыт.', 'system');
+                setTimeout(() => {
+                    openKochModal();
+                }, 250);
+                return;
+            }
+
+            // Скрытая команда: "аморально"
+            if (normalized === 'аморально') {
+                appendChatMessage('Система', '👎 Счётчик сброшен!', 'system');
+                setTimeout(() => {
+                    closeChat();
+                    triggerAmoralEffect();
+                }, 200);
+                return;
+            }
+
+            // Скрытая команда: "валя"
+            if (normalized === 'валя') {
+                appendChatMessage('Валя', '💨', 'system');
+                setTimeout(() => {
+                    closeChat();
+                    triggerValyaFartSounds();
+                }, 150);
+                return;
+            }
+        }
+
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const text = chatInput.value;
+            chatInput.value = '';
+            handleChatSubmit(text);
+        });
+
+        chatBtn.addEventListener('click', () => {
+            if (chatModal.classList.contains('hidden')) {
+                openChat();
+            } else {
+                closeChat();
+            }
+        });
+        closeChatBtn.addEventListener('click', closeChat);
+        chatModal.addEventListener('click', (e) => {
+            if (e.target === chatModal) closeChat();
+        });
+
+        if (kochQuickBtn) {
+            kochQuickBtn.addEventListener('click', openKochModal);
+        }
+
+        // Обработчики секретной панели "КОЧ ГОЛДА"
+        closeKochModalBtn.addEventListener('click', closeKochModal);
+        kochGoldaModal.addEventListener('click', (e) => {
+            if (e.target === kochGoldaModal) closeKochModal();
+        });
+
+        function grantGold(amount) {
+            const val = Math.floor(Number(amount));
+            if (isNaN(val) || val <= 0) return;
+            gold += val;
+            saveState();
+            playCoinSound();
+            updateUI();
+        }
+
+        document.querySelectorAll('.koch-gold-preset').forEach(btn => {
+            btn.addEventListener('click', () => grantGold(btn.getAttribute('data-add-gold')));
+        });
+        addCustomGoldBtn.addEventListener('click', () => {
+            grantGold(customGoldInput.value);
+            customGoldInput.value = '';
+        });
+
+        function grantClickPower(amount) {
+            const val = Math.floor(Number(amount));
+            if (isNaN(val) || val <= 0) return;
+            cheatBonuses.clickPower += val;
+            saveState();
+            playClickSound();
+            updateUI();
+        }
+
+        document.querySelectorAll('.koch-power-preset').forEach(btn => {
+            btn.addEventListener('click', () => grantClickPower(btn.getAttribute('data-add-power')));
+        });
+        addCustomPowerBtn.addEventListener('click', () => {
+            grantClickPower(customPowerInput.value);
+            customPowerInput.value = '';
+        });
+
+        function grantAutoClick(amount) {
+            const val = Math.floor(Number(amount));
+            if (isNaN(val) || val <= 0) return;
+            cheatBonuses.autoClick += val;
+            saveState();
+            playClickSound();
+            updateUI();
+        }
+
+        document.querySelectorAll('.koch-auto-preset').forEach(btn => {
+            btn.addEventListener('click', () => grantAutoClick(btn.getAttribute('data-add-auto')));
+        });
+        addCustomAutoBtn.addEventListener('click', () => {
+            grantAutoClick(customAutoInput.value);
+            customAutoInput.value = '';
+        });
+
+        function grantGoldMine(amount) {
+            const val = Math.floor(Number(amount));
+            if (isNaN(val) || val <= 0) return;
+            cheatBonuses.goldMine += val;
+            saveState();
+            playCoinSound();
+            updateUI();
+        }
+
+        document.querySelectorAll('.koch-goldmine-preset').forEach(btn => {
+            btn.addEventListener('click', () => grantGoldMine(btn.getAttribute('data-add-goldmine')));
+        });
+        addCustomGoldMineBtn.addEventListener('click', () => {
+            grantGoldMine(customGoldMineInput.value);
+            customGoldMineInput.value = '';
+        });
+
+        resetCheatBonusesBtn.addEventListener('click', () => {
+            cheatBonuses = { clickPower: 0, autoClick: 0, goldMine: 0 };
+            saveState();
+            updateUI();
+        });
+
+        // Обработчики клика мышью, тача и клавиатуры (Пробел / Enter / T)
+        clickerBtn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            handleActionClick(e.clientX, e.clientY, false);
+        });
+
+        window.addEventListener('keydown', (e) => {
+            const activeTag = document.activeElement ? document.activeElement.tagName : '';
+            const isTyping = activeTag === 'INPUT' || activeTag === 'TEXTAREA';
+
+            if (e.key === 'Escape') {
+                closeShop();
+                closeChat();
+                closeKochModal();
+                resetModal.classList.add('hidden');
+                resetModal.classList.remove('flex');
+                return;
+            }
+
+            if (isTyping) {
+                return;
+            }
+
+            if (e.repeat) return;
+
+            const anyModalOpen =
+                !shopModal.classList.contains('hidden') ||
+                !resetModal.classList.contains('hidden') ||
+                !chatModal.classList.contains('hidden') ||
+                !kochGoldaModal.classList.contains('hidden');
+
+            if (anyModalOpen) {
+                return;
+            }
+
+            if (e.code === 'KeyT') {
+                e.preventDefault();
+                openChat();
+                return;
+            }
+
+            if (e.code === 'Space' || e.code === 'Enter') {
+                if (activeTag === 'BUTTON' && document.activeElement !== clickerBtn) {
+                    return;
+                }
+                e.preventDefault();
+                handleActionClick(null, null, false);
+            }
+        });
+
+        // Автокликер (срабатывает каждую секунду, если куплены улучшения или добавлены через КОЧ ГОЛДА)
+        setInterval(() => {
+            if (getAutoClicksPerSec() > 0) {
+                handleActionClick(null, null, true);
+            }
+        }, 1000);
+
+        // Управление магазином
+        function openShop() {
+            closeChat();
+            closeKochModal();
+            renderShop();
+            shopModal.classList.remove('hidden');
+            shopModal.classList.add('flex');
+        }
+
+        function closeShop() {
+            shopModal.classList.add('hidden');
+            shopModal.classList.remove('flex');
+        }
+
+        shopBtn.addEventListener('click', openShop);
+        inlineShopLink.addEventListener('click', openShop);
+        closeShopBtn.addEventListener('click', closeShop);
+        shopModal.addEventListener('click', (e) => {
+            if (e.target === shopModal) closeShop();
+        });
+
+        // Переключение звука
+        muteBtn.addEventListener('click', () => {
+            isMuted = !isMuted;
+            localStorage.setItem('panther_clicker_muted', isMuted.toString());
+            if (isMuted) {
+                stopPitbikeSong();
+                if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+            }
+            updateUI();
+        });
+
+        // Управление сбросом прогресса
+        resetBtn.addEventListener('click', () => {
+            resetModal.classList.remove('hidden');
+            resetModal.classList.add('flex');
+        });
+
+        cancelResetBtn.addEventListener('click', () => {
+            resetModal.classList.add('hidden');
+            resetModal.classList.remove('flex');
+        });
+
+        resetModal.addEventListener('click', (e) => {
+            if (e.target === resetModal) {
+                resetModal.classList.add('hidden');
+                resetModal.classList.remove('flex');
+            }
+        });
+
+        confirmResetBtn.addEventListener('click', () => {
+            stopPitbikeSong();
+            count = 0;
+            gold = 0;
+            goldProgressClicks = 0;
+            lastCelebratedMilestone = 0;
+            upgrades = {
+                doubleClick: 0,
+                autoClicker: 0,
+                goldMine: 0,
+                pantherPower: 0,
+                turboBot: 0
+            };
+            cheatBonuses = {
+                clickPower: 0,
+                autoClick: 0,
+                goldMine: 0
+            };
+            lastWordDisplay.textContent = '—';
+            lastWordDisplay.style.color = '#fcd34d';
+            saveState();
+            updateUI();
+            resetModal.classList.add('hidden');
+            resetModal.classList.remove('flex');
+        });
+
+        // Предзагрузка голосов синтезатора речи и первичная отрисовка интерфейса
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.getVoices();
+        }
+        updateUI();
+    </script>
+</body>
+</html>
